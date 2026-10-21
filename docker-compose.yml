@@ -1,0 +1,82 @@
+services:
+  # =============================================================================
+  # PostgreSQL: Multi-Database Instance (AuthDB, OrderDB, InventoryDB)
+  # Principle: DB-per-service isolation within a single unified container for local dev.
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: omni-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: omni_admin
+      POSTGRES_PASSWORD: omni_password123
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omni_admin -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omni-network
+
+  # =============================================================================
+  # Redis: Ephemeral State & High-Performance Caching
+  # Principle: Used for Shopping Cart storage (TTL) and distributed locking.
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: omni-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - omni-network
+
+  # =============================================================================
+  # RabbitMQ: Message Broker with Management Web UI
+  # Principle: Asynchronous event-driven communication (MassTransit OrderPaidEvent).
+  # =============================================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: omni-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: omni_guest
+      RABBITMQ_DEFAULT_PASS: omni_guest123
+    ports:
+      - "5672:5672"    # AMQP protocol port
+      - "15672:15672"  # Web Management Dashboard
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - omni-network
+
+networks:
+  omni-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
