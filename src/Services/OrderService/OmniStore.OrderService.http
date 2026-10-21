@@ -1,0 +1,6 @@
+@OmniStore.OrderService_HostAddress = http://localhost:5062
+
+GET {{OmniStore.OrderService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
