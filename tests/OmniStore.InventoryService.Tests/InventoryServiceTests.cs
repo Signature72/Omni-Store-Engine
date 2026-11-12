@@ -62,6 +62,63 @@ public class InventoryServiceTests
     }
 
     [Fact]
+    public async Task ReserveStockAsync_WithMultipleDistinctItems_ShouldCreateMultipleReservationsWithUniqueIds()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var product1 = new Product
+        {
+            Id = Guid.NewGuid(),
+            Sku = "SKU-MULT-1",
+            Name = "Multi Product 1",
+            Price = 100m,
+            AvailableStock = 10,
+            ReservedStock = 0
+        };
+        var product2 = new Product
+        {
+            Id = Guid.NewGuid(),
+            Sku = "SKU-MULT-2",
+            Name = "Multi Product 2",
+            Price = 200m,
+            AvailableStock = 15,
+            ReservedStock = 0
+        };
+        dbContext.Products.AddRange(product1, product2);
+        await dbContext.SaveChangesAsync();
+
+        var manager = new InventoryManager(dbContext, NullLogger<InventoryManager>.Instance);
+        var orderId = Guid.NewGuid();
+        var items = new List<ReserveItemDto>
+        {
+            new(product1.Id, 2),
+            new(product2.Id, 3)
+        };
+
+        // Act
+        var result = await manager.ReserveStockAsync(orderId, items, 900);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.ReservationId.Should().NotBeEmpty();
+
+        var reservations = await dbContext.StockReservations
+            .Where(r => r.OrderId == orderId)
+            .ToListAsync();
+
+        reservations.Should().HaveCount(2);
+        // Ensure each reservation has a unique primary key to avoid EF Core tracking conflicts
+        reservations.Select(r => r.Id).Distinct().Should().HaveCount(2);
+
+        var updatedP1 = await dbContext.Products.FindAsync(product1.Id);
+        var updatedP2 = await dbContext.Products.FindAsync(product2.Id);
+        updatedP1!.AvailableStock.Should().Be(8);
+        updatedP1.ReservedStock.Should().Be(2);
+        updatedP2!.AvailableStock.Should().Be(12);
+        updatedP2.ReservedStock.Should().Be(3);
+    }
+
+    [Fact]
     public async Task ReserveStockAsync_WhenInsufficientStock_ShouldFailAndNotChangeStock()
     {
         // Arrange
