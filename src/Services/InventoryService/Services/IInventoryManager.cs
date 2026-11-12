@@ -76,9 +76,10 @@ public class InventoryManager : IInventoryManager
             product.AvailableStock -= item.Quantity;
             product.ReservedStock += item.Quantity;
 
+            // Use unique GUID per reservation entry to avoid EF Core primary key conflict on multi-item orders
             var reservation = new StockReservation
             {
-                Id = reservationBatchId,
+                Id = Guid.NewGuid(),
                 OrderId = orderId,
                 ProductId = item.ProductId,
                 Quantity = item.Quantity,
